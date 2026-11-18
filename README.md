@@ -101,6 +101,21 @@ Read `docs/INTEGRATION_CONTRACTS.md` and `docs/DEVELOPMENT_WORKFLOW.md` before c
 - `docs/INTEGRATION_CONTRACTS.md` — schemas and interface rules.
 - `docs/SECURITY.md` — upload, prompt-injection, PII and sandbox controls.
 - `docs/DATA_DICTIONARY.md` — metric and dataset rules.
+- `docs/PROFILING_AND_RETRIEVAL.md` — profiling warnings, retrieval index build, provenance and evaluation (P2).
+
+## Profiling and retrieval (P2) quick start
+
+```bash
+python scripts/build_index.py      # builds artifacts/index via the shared embedding API (EMBEDDING_* in .env)
+python scripts/p2_demo.py tests/fixtures/mini_multisheet_fixture.xlsx "How is operating profit defined?"
+python scripts/eval_retrieval.py   # recall@k / MRR for dense, BM25 and hybrid retrieval
+```
+
+`profile_workbook` returns a `WorkbookProfile` with coded quality warnings (for example
+`HIDDEN_SHEET`, `FORMULA_NO_CACHED_VALUE`, `NUMERIC_AS_TEXT`, `DATE_COERCION_LOSS`, `POSSIBLE_PII`).
+`retrieve_context` returns a `RetrievedContext` whose items carry `item_id`, `source_path`
+(`file#heading`), `title`, `score` and `source_type`, plus the `corpus_version` of the index. If the
+index is missing it returns no items and a `RETRIEVAL_UNAVAILABLE` warning instead of failing.
 
 ## Definition of Done for every task
 

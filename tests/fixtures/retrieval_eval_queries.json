@@ -1,0 +1,22 @@
+[
+  {"query": "How is operating profit calculated?", "must_contain": "Operating profit = net sales"},
+  {"query": "How do I compute net sales after refunds?", "must_contain": "Net sales = gross Sales"},
+  {"query": "What is the margin formula?", "must_contain": "Margin: `sum(Profit) / sum(Sales)`"},
+  {"query": "Should I average row-level margins?", "must_contain": "do not average row-level margins"},
+  {"query": "Which quarter counts as the last completed quarter?", "must_contain": "Last completed quarter"},
+  {"query": "Does the Online Retail dataset have profit or cost data?", "must_contain": "does not provide Profit"},
+  {"query": "How are cancelled invoices identified?", "must_contain": "leading `C` in InvoiceNo"},
+  {"query": "Can I add amounts in USD and EUR together?", "must_contain": "incompatible currencies"},
+  {"query": "How should returns be joined to orders?", "must_contain": "Aggregate refunds by Order_ID"},
+  {"query": "Which unit cost applies to an order?", "must_contain": "most recent applicable effective cost"},
+  {"query": "How should growth be computed when the prior period is zero?", "must_contain": "denominator convention"},
+  {"query": "Is budget profit the same as actual profit?", "must_contain": "Budget is a target"},
+  {"query": "What does the NEGATIVE_VALUES warning mean?", "must_contain": "NEGATIVE_VALUES"},
+  {"query": "Dates like 01/02/2025 could be January or February", "must_contain": "AMBIGUOUS_DATE_FORMAT"},
+  {"query": "Formula cells have no cached value", "must_contain": "FORMULA_NO_CACHED_VALUE"},
+  {"query": "Amounts stored as text with currency symbols", "must_contain": "NUMERIC_AS_TEXT"},
+  {"query": "Should a hidden sheet be included in the analysis?", "must_contain": "HIDDEN_SHEET"},
+  {"query": "Can I sum CustomerID?", "must_contain": "Never sum or average an identifier"},
+  {"query": "How many rows does sample_rows return?", "must_contain": "MAX_SAMPLE_ROWS"},
+  {"query": "What checks are needed before joining two sheets?", "must_contain": "key uniqueness"}
+]
