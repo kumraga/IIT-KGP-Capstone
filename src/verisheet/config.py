@@ -1,7 +1,7 @@
 """Central application configuration loaded from environment variables."""
 
 from functools import lru_cache
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,6 +17,13 @@ class Settings(BaseSettings):
     qwen_api_base: str = ""
     qwen_api_key: str = ""
     qwen_model: str = "Qwen3-8B"
+    # Shared capstone embedding API (OpenAI-compatible /v1/embeddings); see src/verisheet/embeddings.py.
+    embedding_provider: str = "auto"  # auto | api | local
+    embedding_api_base: str = ""
+    embedding_api_key: SecretStr = SecretStr("")
+    embedding_model: str = "bge-small-en-v1.5"
+    embedding_ca_cert: str = ""
+    embedding_timeout_seconds: int = Field(default=30, ge=1, le=300)
     data_dir: str = "data"
     artifact_dir: str = "artifacts"
     trace_dir: str = "results/traces"

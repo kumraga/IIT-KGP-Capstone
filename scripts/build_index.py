@@ -4,6 +4,9 @@ Usage:
     python scripts/build_index.py                      # defaults below
     python scripts/build_index.py --index-dir artifacts/index --chunk-chars 600
 
+Embeddings come from the shared capstone embedding API when EMBEDDING_API_BASE/KEY are set
+(see .env.example), otherwise from the local sentence-transformers model.
+
 Indexes only allowlisted documentation (data dictionary, tool docs, prompt rules). Gold answers,
 raw/uploaded workbooks and secrets are never read. Prints the corpus version for traceability.
 """
@@ -37,7 +40,8 @@ def main() -> int:
     retriever.build_index(corpus)
 
     by_source = Counter(item["source_path"].split("#")[0] for item in corpus)
-    print(f"Indexed {len(corpus)} chunks with {args.model}")
+    print(f"Indexed {len(corpus)} chunks with {args.model} "
+          f"(embeddings: {retriever.embedding_provider}, vector backend: {retriever.backend})")
     for source, count in sorted(by_source.items()):
         print(f"  {count:3d}  {source}")
     print(f"corpus_version: {retriever.corpus_version}")

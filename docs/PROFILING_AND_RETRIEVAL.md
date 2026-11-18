@@ -1,7 +1,7 @@
 # Profiling and retrieval module (Person 2)
 
 Owner files: `src/verisheet/profile.py`, `src/verisheet/tools/inspect.py`,
-`src/verisheet/retrieval.py`, `scripts/build_index.py`, `scripts/p2_demo.py`,
+`src/verisheet/retrieval.py`, `src/verisheet/embeddings.py`, `scripts/build_index.py`, `scripts/p2_demo.py`,
 `scripts/eval_retrieval.py`, `docs/tools/PROFILING_TOOLS.md`.
 
 Contracts produced: `WorkbookProfile` and `RetrievedContext` from `src/verisheet/schemas.py`.
@@ -10,14 +10,46 @@ No module-specific schema copies exist.
 ## Setup
 
 ```bash
-pip install -r requirements.txt     # includes sentence-transformers and faiss-cpu
+pip install -r requirements.txt
 pip install -e .
-python scripts/build_index.py       # first run downloads BAAI/bge-small-en-v1.5 (~130 MB)
+cp .env.example .env                # then fill in the EMBEDDING_* values (below)
+python scripts/build_index.py       # prints which embedding provider was used
 ```
 
-The model is cached by Hugging Face under `~/.cache/huggingface` (override with `HF_HOME`).
-After the first download you can work offline with `HF_HUB_OFFLINE=1`. The index is written to
-`artifacts/index/` (git-ignored); rebuild it whenever approved documentation changes.
+The index is written to `artifacts/index/` (git-ignored). Rebuild it whenever approved
+documentation changes.
+
+### Embedding provider
+
+Embeddings come from the **shared capstone embedding API** (`POST /v1/embeddings`, model
+`bge-small-en-v1.5`, 384 dimensions). Set these in `.env`:
+
+| Variable | Value |
+|---|---|
+| `EMBEDDING_API_BASE` | base URL from the coordinator's quickstart, ending in `/v1` |
+| `EMBEDDING_API_KEY` | shared embedding key from the coordinator (never commit it) |
+| `EMBEDDING_MODEL` | `bge-small-en-v1.5` |
+| `EMBEDDING_CA_CERT` | `config/vm02-ca.crt`: copy the coordinator's certificate there (git-ignored; relative paths resolve from the project root) |
+| `EMBEDDING_PROVIDER` | `auto` (default), `api` or `local` |
+
+`src/verisheet/embeddings.py` implements the client:
+- It sends at most 16 texts per request and truncates each text to about 450 tokens (the service
+  limit is 512).
+- It retries capacity and transient errors (429/5xx/timeouts) with exponential backoff, honouring
+  `Retry-After`.
+- TLS is verified against the private CA certificate and is never disabled.
+- The key is held as a `SecretStr`. It is never logged and never appears in error messages.
+- Authentication errors (401/403) fail immediately with a clear message.
+
+With `EMBEDDING_PROVIDER=auto`, the API is used when the base URL and key are set. Otherwise the
+local `BAAI/bge-small-en-v1.5` sentence-transformers model is used: the same weights, downloaded
+to `~/.cache/huggingface`, usable offline with `HF_HUB_OFFLINE=1`. Both produce the same vectors
+(cosine 1.0 on spot checks), so an index built with one can be queried with the other. A warning
+is logged if they differ.
+
+The BGE query instruction prefix is added client-side, because the service embeds text as sent.
+If the embedding API is unreachable, `retrieve_context` returns a `RETRIEVAL_UNAVAILABLE` warning
+instead of failing.
 
 ## Public API
 
@@ -76,10 +108,11 @@ for retrieval), and `WARNING_CODES` in `profile.py` is the source of truth.
 ## Vector backend
 
 `manifest.json` + `embeddings.npy` are always written, and `index.faiss` (FAISS `IndexFlatIP`)
-when the FAISS backend is active. Linux/Windows default to FAISS. macOS defaults to exact numpy
-inner-product search (identical ranking) because the `faiss-cpu` and `torch` pip wheels each
-bundle `libomp`, and using both in one process aborts with `OMP: Error #15`. Override with
-`VERISHEET_VECTOR_BACKEND=faiss|numpy`.
+when the FAISS backend is active. FAISS is the default everywhere except macOS with the **local**
+embedding model. There, the `faiss-cpu` and `torch` pip wheels each bundle `libomp`, and using both
+in one process aborts with `OMP: Error #15`, so exact numpy inner-product search (identical
+ranking) is used instead. With the embedding API, torch is never loaded and FAISS is used on macOS
+too. Override with `VERISHEET_VECTOR_BACKEND=faiss|numpy`.
 
 ## Evaluation and chunking experiment
 
@@ -111,6 +144,9 @@ Person 1 finalises the data dictionary.
 python -m pytest tests/test_profile.py tests/test_inspect.py tests/test_retrieval.py -v
 ```
 
-Retrieval tests use a deterministic hashing encoder (no network). The real BGE test runs only when
+Retrieval tests use a deterministic hashing encoder, and embedding-client tests use a mocked HTTP
+server (`tests/test_embeddings.py`), so neither needs network or a key. To smoke-test the real
+service, set the `EMBEDDING_*` variables and run
+`VERISHEET_LIVE_EMBEDDING_TEST=1 python -m pytest tests/test_embeddings.py -k live`. The real BGE test runs only when
 the model is already in the local Hugging Face cache. The FAISS test runs in a subprocess to avoid
 the macOS `libomp` clash.

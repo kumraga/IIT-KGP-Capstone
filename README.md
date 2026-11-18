@@ -106,7 +106,7 @@ Read `docs/INTEGRATION_CONTRACTS.md` and `docs/DEVELOPMENT_WORKFLOW.md` before c
 ## Profiling and retrieval (P2) quick start
 
 ```bash
-python scripts/build_index.py      # builds artifacts/index from approved docs; first run downloads BGE
+python scripts/build_index.py      # builds artifacts/index via the shared embedding API (EMBEDDING_* in .env)
 python scripts/p2_demo.py tests/fixtures/mini_multisheet_fixture.xlsx "How is operating profit defined?"
 python scripts/eval_retrieval.py   # recall@k / MRR for dense, BM25 and hybrid retrieval
 ```

@@ -24,6 +24,7 @@ from typing import Any, Iterable
 
 import numpy as np
 
+from verisheet.embeddings import EmbeddingServiceError, create_encoder, embedding_provider
 from verisheet.schemas import RetrievedContext, RetrievedItem
 
 logger = logging.getLogger(__name__)
@@ -91,10 +92,12 @@ class DefinitionRetriever:
         corpus_version: hash of model + chunk ids/content of the loaded index, or ``None``.
         backend: ``"faiss"`` (IndexFlatIP) or ``"numpy"`` (exact, same ranking); see
             ``_default_backend``. ``embeddings.npy`` is always saved so either can load an index.
+        embedding_provider: ``"api"`` (shared capstone embedding service) or ``"local"``
+            (sentence-transformers); see ``verisheet.embeddings``.
     """
 
     def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5", index_dir: str = "artifacts/index"):
-        """Load the configured sentence-transformers encoder and optional saved FAISS index.
+        """Configure the embedding provider (API or local) and load a saved index if present.
 
         The encoder is loaded lazily on first embed so that loading/inspecting an index (and
         tests that inject an encoder) do not require the model download.
@@ -102,7 +105,8 @@ class DefinitionRetriever:
         self.model_name = model_name
         self.index_dir = Path(index_dir)
         self.mode = "hybrid"
-        self.backend = _default_backend()
+        self.embedding_provider = embedding_provider()
+        self.backend = _default_backend(self.embedding_provider)
         self.corpus_version: str | None = None
         self._encoder: Any = None
         self._faiss_index: Any = None
@@ -138,6 +142,7 @@ class DefinitionRetriever:
         manifest = {
             "format": MANIFEST_FORMAT,
             "model_name": self.model_name,
+            "embedding_provider": self.embedding_provider,
             "query_instruction": QUERY_INSTRUCTION,
             "dimension": int(vectors.shape[1]),
             "corpus_version": version,
@@ -230,6 +235,11 @@ class DefinitionRetriever:
                 f"'{self.model_name}'; rebuild the index."
             )
 
+        built_with = manifest.get("embedding_provider")
+        if built_with and built_with != self.embedding_provider:
+            # Same model weights either way, but tiny numeric differences are possible.
+            logger.warning("index built with %s embeddings, querying with %s; rebuild recommended",
+                           built_with, self.embedding_provider)
         items = [
             {k: entry[k] for k in ("item_id", "source_path", "title", "content", "source_type")}
             for entry in sorted(manifest["items"], key=lambda e: e["position"])
@@ -252,9 +262,8 @@ class DefinitionRetriever:
     @property
     def encoder(self) -> Any:
         if self._encoder is None:
-            from sentence_transformers import SentenceTransformer  # heavy import, lazy
-
-            self._encoder = SentenceTransformer(self.model_name)
+            # Shared capstone embedding API when configured, else local sentence-transformers.
+            self._encoder = create_encoder(self.model_name)
         return self._encoder
 
     def _embed(self, texts: list[str], is_query: bool) -> np.ndarray:
@@ -520,7 +529,7 @@ def retrieve_context(
     try:
         active = retriever if retriever is not None else _default_retriever()
         context = active.search(query, top_k=DEFAULT_TOP_K * 2)
-    except (IndexNotBuiltError, ImportError, OSError) as exc:
+    except (IndexNotBuiltError, EmbeddingServiceError, ImportError, OSError) as exc:
         logger.warning("retrieval unavailable: %s", type(exc).__name__)
         return RetrievedContext(
             query=query.strip()[:MAX_QUERY_CHARS],
@@ -661,17 +670,18 @@ def _atomic_write_text(path: Path, text: str) -> None:
     os.replace(tmp, path)
 
 
-def _default_backend() -> str:
-    """Vector search backend: ``VERISHEET_VECTOR_BACKEND`` env var, else faiss except on macOS.
+def _default_backend(provider: str = "local") -> str:
+    """Vector search backend: ``VERISHEET_VECTOR_BACKEND`` env var, else faiss when safe.
 
     On macOS the faiss-cpu and torch pip wheels each bundle their own ``libomp``; using both in
-    one process aborts with "OMP: Error #15". Exact numpy inner-product search returns the same
-    ranking as ``IndexFlatIP``, so macOS defaults to it. Linux/Docker uses FAISS.
+    one process aborts with "OMP: Error #15". That only matters for the *local* encoder (torch);
+    with the embedding API torch is never loaded, so FAISS is used. Exact numpy inner-product
+    search returns the same ranking as ``IndexFlatIP`` and is the macOS + local default.
     """
     choice = os.environ.get("VERISHEET_VECTOR_BACKEND", "").strip().lower()
     if choice in ("faiss", "numpy"):
         return choice
-    if sys.platform == "darwin":
+    if sys.platform == "darwin" and provider == "local":
         return "numpy"
     return "faiss" if _try_import_faiss() is not None else "numpy"
 

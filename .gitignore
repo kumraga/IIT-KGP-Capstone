@@ -29,6 +29,10 @@ dist/
 .mypy_cache/
 .ipynb_checkpoints/
 
+# Course-provided TLS certificates (distributed by the coordinator; keep out of the public repo)
+config/*.crt
+*.crt
+
 # Any env/secrets variant except the documented template
 .env.*
 !.env.example

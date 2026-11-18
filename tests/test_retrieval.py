@@ -22,6 +22,17 @@ FIXTURES = Path(__file__).parent / "fixtures"
 MODEL = "BAAI/bge-small-en-v1.5"
 
 
+@pytest.fixture(autouse=True)
+def _offline_embedding_provider(monkeypatch):
+    """Keep tests offline and deterministic even when .env configures the embedding API."""
+    from verisheet.config import get_settings
+
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 class HashingEncoder:
     """Deterministic offline stand-in for BGE: hashed bag-of-words vectors.
 
